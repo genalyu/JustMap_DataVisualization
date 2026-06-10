@@ -18,7 +18,20 @@
 - 🌍 **群系占比** — 南丁格尔玫瑰图展示生物群系分布
 - 🐾 **生物统计** — 柱状图展示各类生物数量
 - 🔥 **生物热力图** — 基于 Leaflet.heat 展示生物密度分布
-- ⚔️ **玩家位置** — 实时追踪玩家坐标
+- ️ **玩家位置** — 实时追踪玩家坐标
+
+<table>
+  <tr>
+    <td align="center"><img src="asserts/游戏照片.png" width="100%" alt="游戏内截图"/></td>
+    <td align="center"><img src="asserts/展开图.png" width="100%" alt="完整界面展开图"/></td>
+    <td align="center"><img src="asserts/web图.png" width="100%" alt="Web可视化界面"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>游戏内截图</b></td>
+    <td align="center"><b>Web 可视化界面</b></td>
+    <td align="center"><b>完整界面展开图</b></td>
+  </tr>
+</table>
 
 ## 🏗️ 架构设计
 
