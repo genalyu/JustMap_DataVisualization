@@ -216,12 +216,21 @@ public class VisHttpServer {
                 }
 
                 java.io.File tileFile = DataCollector.getRegionFile(regionX, regionZ, layer, level);
-                if (tileFile == null || !tileFile.exists()) {
+                byte[] imageBytes = null;
+
+                if (tileFile != null && tileFile.exists()) {
+                    // Serve from disk cache
+                    imageBytes = Files.readAllBytes(tileFile.toPath());
+                } else if ("surface".equals(layer) && level == 0) {
+                    // Generate on-the-fly from in-memory chunk data
+                    imageBytes = DataCollector.generateRegionPng(regionX, regionZ);
+                }
+
+                if (imageBytes == null) {
                     sendError(exchange, 404, "Tile not found");
                     return;
                 }
 
-                byte[] imageBytes = Files.readAllBytes(tileFile.toPath());
                 exchange.getResponseHeaders().set("Content-Type", "image/png");
                 exchange.getResponseHeaders().set("Cache-Control", "no-cache");
                 exchange.sendResponseHeaders(200, imageBytes.length);

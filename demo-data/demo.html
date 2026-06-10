@@ -62,13 +62,27 @@
         }
         .main-content { flex: 1; display: flex; overflow: hidden; }
         .map-section { flex: 1; position: relative; }
-        #map { width: 100%; height: 100%; background: #0a0a1a; }
+        #map {
+            width: 100%; height: 100%;
+            background: #0a0a1a;
+            background-image:
+                linear-gradient(rgba(42,58,94,0.15) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(42,58,94,0.15) 1px, transparent 1px);
+            background-size: 64px 64px;
+        }
         .leaflet-container { background: #0a0a1a !important; }
         .leaflet-control-zoom a {
             background: var(--bg-card) !important;
             color: var(--text-primary) !important;
             border-color: var(--border-color) !important;
         }
+        /* Entity icon styles */
+        .entity-icon { filter: drop-shadow(0 0 3px rgba(0,0,0,0.8)); transition: transform 0.15s; }
+        .entity-icon:hover { transform: scale(1.4); }
+        .entity-icon.entity-passive { filter: drop-shadow(0 0 3px rgba(92,184,92,0.6)); }
+        .entity-icon.entity-hostile { filter: drop-shadow(0 0 3px rgba(231,76,60,0.6)); }
+        .entity-icon.entity-neutral { filter: drop-shadow(0 0 3px rgba(240,160,48,0.6)); }
+        .entity-icon.entity-player { filter: drop-shadow(0 0 3px rgba(74,237,217,0.8)); }
         .charts-section {
             width: var(--sidebar-width);
             background: var(--bg-secondary);
@@ -304,14 +318,46 @@
         .bindTooltip(`<strong>⚔️ 玩家</strong><br>X: ${DEMO_DATA.player.x}<br>Y: ${DEMO_DATA.player.y}<br>Z: ${DEMO_DATA.player.z}`, { direction: 'top' })
         .addTo(map);
 
-    // Entity markers
+    // Entity type to icon filename
+    const ENTITY_ICON_MAP = {
+        '猪': 'pig', '牛': 'cow', '鸡': 'chicken', '羊': 'sheep',
+        '马': 'horse', '狼': 'wolf', '猫': 'cat', '兔子': 'rabbit',
+        '熊猫': 'panda', '狐狸': 'fox', '鹦鹉': 'parrot',
+        '海豚': 'dolphin', '海龟': 'turtle', '鱼': 'cod',
+        '僵尸': 'zombie', '骷髅': 'skeleton', '苦力怕': 'creeper',
+        '蜘蛛': 'spider', '末影人': 'enderman', '女巫': 'witch',
+        '史莱姆': 'slime', '烈焰人': 'blaze', '恶魂': 'ghast',
+        '铁傀儡': 'iron_golem', '雪傀儡': 'snow_golem',
+        '村民': 'villager', '掠夺者': 'pillager',
+        '蜜蜂': 'bee', '驴': 'donkey', '北极熊': 'polar_bear',
+        '蝙蝠': 'bat', '鱿鱼': 'squid', '幻翼': 'phantom',
+    };
+
+    // Entity markers with icons
     DEMO_DATA.entities.forEach(e => {
-        const color = ENTITY_COLORS[e.category] || ENTITY_COLORS.other;
-        const icon = L.divIcon({
-            className: '', html: `<div style="width:8px;height:8px;border-radius:50%;background:${color};border:1px solid rgba(255,255,255,0.6)"></div>`,
-            iconSize: [8, 8], iconAnchor: [4, 4]
+        const iconName = ENTITY_ICON_MAP[e.type] || 'pig';
+        const iconUrl = `entities/${iconName}.png`;
+        const iconSize = 22;
+
+        const icon = L.icon({
+            iconUrl: iconUrl,
+            iconSize: [iconSize, iconSize],
+            iconAnchor: [iconSize / 2, iconSize / 2],
+            className: 'entity-icon entity-' + e.category
         });
-        L.marker([e.z, e.x], { icon }).bindTooltip(`${e.type}`, { direction: 'top' }).addTo(map);
+
+        const catColors = { passive: '#5cb85c', hostile: '#e74c3c', neutral: '#f0a030', player: '#4aedd9', other: '#6c6c80' };
+        const catNames = { passive: '被动', hostile: '敌对', neutral: '中立', player: '玩家', other: '其他' };
+        const borderColor = catColors[e.category] || '#6c6c80';
+
+        L.marker([e.z, e.x], { icon, zIndexOffset: 100 })
+            .bindTooltip(
+                `<strong style="color:${borderColor}">${e.type}</strong><br>` +
+                `坐标: (${Math.round(e.x)}, ${Math.round(e.y)}, ${Math.round(e.z)})<br>` +
+                `类型: ${catNames[e.category] || e.category}`,
+                { direction: 'top', offset: [0, -iconSize / 2] }
+            )
+            .addTo(map);
     });
 
     // ═══════════════════════════════════════════════════

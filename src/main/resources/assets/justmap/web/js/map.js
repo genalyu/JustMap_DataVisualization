@@ -52,37 +52,36 @@ const MapView = (() => {
 
     /**
      * Load map tiles from region data.
+     * Falls back to procedural terrain generation if no tiles found.
      * @param {Array} regions - Array of RegionInfo objects
      */
     function loadTiles(regions) {
-        if (!regions || regions.length === 0) {
-            console.log('No map tiles to load');
-            return;
-        }
-
         // Remove old overlays
         tileOverlays.forEach(overlay => map.removeLayer(overlay));
         tileOverlays = [];
 
         // Filter to surface layer only for base map
-        const surfaceRegions = regions.filter(r => r.layer === 'surface');
+        const surfaceRegions = regions ? regions.filter(r => r.layer === 'surface') : [];
 
-        if (surfaceRegions.length === 0) {
-            console.log('No surface regions found');
-            return;
+        if (surfaceRegions && surfaceRegions.length > 0) {
+            // Use real JustMap tiles
+            _loadRealTiles(surfaceRegions);
+        } else {
+            // Fallback: generate procedural terrain for the visible area
+            _loadProceduralTerrain();
         }
+    }
 
-        // Calculate bounds to fit all regions
+    /**
+     * Load real JustMap tile images as overlays.
+     */
+    function _loadRealTiles(surfaceRegions) {
         let minLat = Infinity, maxLat = -Infinity;
         let minLng = Infinity, maxLng = -Infinity;
 
         surfaceRegions.forEach(region => {
-            // Each region is 512x512 blocks
-            // MC coordinates: X = lng, Z = lat (inverted for Leaflet)
             const blockX = region.regionX * 512;
             const blockZ = region.regionZ * 512;
-
-            // Leaflet Simple CRS: [lat, lng] = [z, x]
             const bounds = [
                 [blockZ, blockX],
                 [blockZ + 512, blockX + 512]
@@ -91,10 +90,7 @@ const MapView = (() => {
             const overlay = L.imageOverlay(
                 `/api/tiles/${region.regionX}/${region.regionZ}.png?layer=${region.layer}&level=${region.level}`,
                 bounds,
-                {
-                    opacity: 0.95,
-                    interactive: true
-                }
+                { opacity: 0.95, interactive: true }
             );
 
             overlay.bindTooltip(
@@ -112,12 +108,59 @@ const MapView = (() => {
             maxLng = Math.max(maxLng, blockX + 512);
         });
 
-        // Fit map to tile bounds
         if (minLat !== Infinity) {
-            map.fitBounds([[minLat, minLng], [maxLat, maxLng]], {
-                padding: [30, 30]
-            });
+            map.fitBounds([[minLat, minLng], [maxLat, maxLng]], { padding: [30, 30] });
         }
+    }
+
+    /**
+     * Generate procedural terrain as fallback when no cached tiles exist.
+     * Creates a 3x3 grid of generated tiles centered on the player.
+     */
+    function _loadProceduralTerrain() {
+        console.log('No map tiles found, generating procedural terrain...');
+
+        // Determine player position for center
+        let cx = 0, cz = 0;
+        if (lastPlayerPos) {
+            cx = Math.floor(lastPlayerPos.x / 512);
+            cz = Math.floor(lastPlayerPos.z / 512);
+        }
+
+        const range = 2; // 5x5 grid centered on player
+        for (let rx = cx - range; rx <= cx + range; rx++) {
+            for (let rz = cz - range; rz <= cz + range; rz++) {
+                const blockX = rx * 512;
+                const blockZ = rz * 512;
+                const bounds = [
+                    [blockZ, blockX],
+                    [blockZ + 512, blockX + 512]
+                ];
+
+                // Generate terrain tile
+                const canvas = TerrainGenerator.generateTile(rx, rz, 512);
+                const dataUrl = canvas.toDataURL('image/png');
+
+                const overlay = L.imageOverlay(dataUrl, bounds, {
+                    opacity: 0.9,
+                    interactive: true
+                });
+
+                overlay.bindTooltip(
+                    `程序地形区域 (${rx}, ${rz})<br>` +
+                    `坐标: (${blockX}, ${blockZ}) - (${blockX + 512}, ${blockZ + 512})`,
+                    { sticky: true }
+                );
+
+                overlay.addTo(map);
+                tileOverlays.push(overlay);
+            }
+        }
+
+        // Center on player or origin
+        const centerLat = lastPlayerPos ? lastPlayerPos.z : 0;
+        const centerLng = lastPlayerPos ? lastPlayerPos.x : 0;
+        map.setView([centerLat, centerLng], -1);
     }
 
     /**
@@ -161,6 +204,7 @@ const MapView = (() => {
 
     /**
      * Update entity markers on the map.
+     * Uses actual MC entity icon images (32x32 PNG).
      * @param {Array} entities - Array of EntityInfo objects
      */
     function updateEntityMarkers(entities) {
@@ -169,61 +213,106 @@ const MapView = (() => {
 
         if (!entities || !showEntities) return;
 
-        // Group entities by position to avoid overlap (grid-based clustering)
-        const gridSize = 8; // blocks
-        const clusters = {};
-
+        // Draw individual entity icons (not clustered for icon display)
         entities.forEach(e => {
-            const gridX = Math.floor(e.x / gridSize);
-            const gridZ = Math.floor(e.z / gridSize);
-            const key = `${gridX},${gridZ}`;
+            const iconUrl = _getEntityIconUrl(e);
+            const iconSize = 20;
 
-            if (!clusters[key]) {
-                clusters[key] = {
-                    x: e.x,
-                    z: e.z,
-                    entities: [],
-                    categories: {}
-                };
-            }
-            clusters[key].entities.push(e);
-            clusters[key].categories[e.category] = (clusters[key].categories[e.category] || 0) + 1;
-        });
-
-        // Create markers for each cluster
-        Object.values(clusters).forEach(cluster => {
-            const dominantCategory = Object.entries(cluster.categories)
-                .sort((a, b) => b[1] - a[1])[0][0];
-
-            const count = cluster.entities.length;
-            const size = Math.min(6 + count * 2, 16);
-
-            const icon = L.divIcon({
-                className: `entity-marker ${dominantCategory}`,
-                iconSize: [size, size],
-                iconAnchor: [size / 2, size / 2]
+            const icon = L.icon({
+                iconUrl: iconUrl,
+                iconSize: [iconSize, iconSize],
+                iconAnchor: [iconSize / 2, iconSize / 2],
+                className: `entity-icon entity-${e.category}`
             });
 
-            const marker = L.marker([cluster.z, cluster.x], { icon: icon });
+            const marker = L.marker([e.z, e.x], { icon: icon });
 
-            // Tooltip with entity details
-            const entityNames = [...new Set(cluster.entities.map(e => e.type))].join(', ');
-            const categoryNames = { passive: '被动', hostile: '敌对', neutral: '中立', player: '玩家', other: '其他' };
-            const catBreakdown = Object.entries(cluster.categories)
-                .map(([k, v]) => `${categoryNames[k] || k}: ${v}`)
-                .join('<br>');
+            // Category color for tooltip border
+            const catColors = {
+                passive: '#5cb85c', hostile: '#e74c3c',
+                neutral: '#f0a030', player: '#4aedd9', other: '#6c6c80'
+            };
+            const catNames = { passive: '被动', hostile: '敌对', neutral: '中立', player: '玩家', other: '其他' };
+            const borderColor = catColors[e.category] || '#6c6c80';
 
             marker.bindTooltip(
-                `<strong>实体 (×${count})</strong><br>` +
-                `坐标: (${Math.round(cluster.x)}, ${Math.round(cluster.z)})<br>` +
-                `${catBreakdown}<br>` +
-                `<em style="color:#888">${entityNames}</em>`,
-                { direction: 'top', offset: [0, -size / 2] }
+                `<strong style="color:${borderColor}">${e.type}</strong><br>` +
+                `坐标: (${Math.round(e.x)}, ${Math.round(e.y)}, ${Math.round(e.z)})<br>` +
+                `类型: ${catNames[e.category] || e.category}`,
+                { direction: 'top', offset: [0, -iconSize / 2] }
             );
 
             entityGroup.addLayer(marker);
             entityMarkers.push(marker);
         });
+    }
+
+    /**
+     * Get the icon URL for an entity.
+     * Tries: /entities/{name}.png → /entities/{english}.png → default
+     */
+    function _getEntityIconUrl(entity) {
+        const name = entity.type || 'other';
+        // Try original name first, then lowercase
+        const candidates = [name, name.toLowerCase()];
+
+        // Entity type to icon filename mapping (handles both CN and EN names)
+        const typeMap = {
+            '猪': 'pig', 'pig': 'pig',
+            '牛': 'cow', 'cow': 'cow',
+            '鸡': 'chicken', 'chicken': 'chicken',
+            '羊': 'sheep', 'sheep': 'sheep',
+            '马': 'horse', 'horse': 'horse',
+            '狼': 'wolf', 'wolf': 'wolf',
+            '猫': 'cat', 'cat': 'cat',
+            '兔子': 'rabbit', 'rabbit': 'rabbit',
+            '熊猫': 'panda', 'panda': 'panda',
+            '狐狸': 'fox', 'fox': 'fox',
+            '鹦鹉': 'parrot', 'parrot': 'parrot',
+            '海豚': 'dolphin', 'dolphin': 'dolphin',
+            '海龟': 'turtle', 'turtle': 'turtle',
+            '鱼': 'cod', 'cod': 'cod',
+            '鲑鱼': 'salmon', 'salmon': 'salmon',
+            '僵尸': 'zombie', 'zombie': 'zombie',
+            '骷髅': 'skeleton', 'skeleton': 'skeleton',
+            '苦力怕': 'creeper', 'creeper': 'creeper',
+            '蜘蛛': 'spider', 'spider': 'spider',
+            '末影人': 'enderman', 'enderman': 'enderman',
+            '女巫': 'witch', 'witch': 'witch',
+            '史莱姆': 'slime', 'slime': 'slime',
+            '烈焰人': 'blaze', 'blaze': 'blaze',
+            '恶魂': 'ghast', 'ghast': 'ghast',
+            '铁傀儡': 'iron_golem', 'iron_golem': 'iron_golem',
+            '雪傀儡': 'snow_golem', 'snow_golem': 'snow_golem',
+            '村民': 'villager', 'villager': 'villager',
+            '流浪商人': 'wandering_trader', 'wandering_trader': 'wandering_trader',
+            '掠夺者': 'pillager', 'pillager': 'pillager',
+            '卫道士': 'vindicator', 'vindicator': 'vindicator',
+            '唤魔者': 'evoker', 'evoker': 'evoker',
+            '僵尸猪灵': 'zombified_piglin', 'zombified_piglin': 'zombified_piglin',
+            '猪灵': 'piglin', 'piglin': 'piglin',
+            '潜影贝': 'shulker', 'shulker': 'shulker',
+            '蜜蜂': 'bee', 'bee': 'bee',
+            '驴': 'donkey', 'donkey': 'donkey',
+            '骡': 'mule', 'mule': 'mule',
+            '北极熊': 'polar_bear', 'polar_bear': 'polar_bear',
+            '蝙蝠': 'bat', 'bat': 'bat',
+            '鱿鱼': 'squid', 'squid': 'squid',
+            '幻翼': 'phantom', 'phantom': 'phantom',
+        };
+
+        // Check type map
+        if (typeMap[name]) {
+            return `/entities/${typeMap[name]}.png`;
+        }
+
+        // Try as-is with common extensions
+        for (const candidate of candidates) {
+            return `/entities/${candidate.toLowerCase()}.png`;
+        }
+
+        // Fallback: generic icon
+        return `/entities/pig.png`;
     }
 
     /**
