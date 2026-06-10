@@ -12,6 +12,7 @@
   "key.justmap.show_worldmap": "Show Worldmap",
   "key.justmap.show_config": "Show map config",
   "key.justmap.toggle_big_map": "Switch to Big Map",
+  "key.justmap.toggle_visualization": "Data Visualization",
 
   "justmap.configuration.category.general": "General",
   "justmap.configuration.category.info": "Map Info",
@@ -122,6 +123,7 @@
   "justmap.gui.worldmap.add_waypoint": "New waypoint",
   "justmap.gui.worldmap.set_map_pos": "Map position",
   "justmap.gui.worldmap.open_map_config": "Settings",
+  "justmap.gui.worldmap.data_visualization": "Data Visualization",
   "justmap.gui.save": "Save",
   "justmap.gui.reset": "Reset",
   "justmap.gui.cancel": "Cancel",

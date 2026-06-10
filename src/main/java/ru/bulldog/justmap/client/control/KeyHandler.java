@@ -12,6 +12,7 @@ import ru.bulldog.justmap.client.JustMapClient;
 import ru.bulldog.justmap.client.config.ConfigFactory;
 import ru.bulldog.justmap.client.screen.WaypointsListScreen;
 import ru.bulldog.justmap.client.screen.WorldmapScreen;
+import ru.bulldog.justmap.visualization.VisHttpServer;
 
 public final class KeyHandler {
 
@@ -112,6 +113,18 @@ public final class KeyHandler {
 			@Override
 			public void onKeyUp() {
 				MC.setScreen(WorldmapScreen.getScreen());
+			}
+
+			@Override
+			public boolean isListening() {
+				return MC.player != null && MC.currentScreen == null;
+			}
+		});
+
+		registerKey(new KeyParser(createKeyBinding("toggle_visualization", GLFW.GLFW_KEY_V)) {
+			@Override
+			public void onKeyUp() {
+				VisHttpServer.getInstance().toggle();
 			}
 
 			@Override

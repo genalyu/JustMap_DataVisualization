@@ -39,6 +39,7 @@ import ru.bulldog.justmap.util.PosUtil;
 import ru.bulldog.justmap.util.GameRulesUtil;
 import ru.bulldog.justmap.util.colors.Colors;
 import ru.bulldog.justmap.util.math.MathUtil;
+import ru.bulldog.justmap.visualization.VisHttpServer;
 
 public class WorldmapScreen extends AbstractJustMapScreen implements IMap {
 
@@ -140,6 +141,10 @@ public class WorldmapScreen extends AbstractJustMapScreen implements IMap {
 		}));
 		this.mapMenu.addElement(new ListElementWidget(langUtil.getText("open_map_config"), () -> {
 			client.setScreen(ConfigFactory.getConfigScreen(this));
+			return true;
+		}));
+		this.mapMenu.addElement(new ListElementWidget(langUtil.getText("data_visualization"), () -> {
+			VisHttpServer.getInstance().toggle();
 			return true;
 		}));
 	}

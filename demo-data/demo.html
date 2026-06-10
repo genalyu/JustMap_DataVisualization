@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MC 地图数据可视化 — 演示版</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <style>
+        :root {
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --bg-card: #1e2a45;
+            --bg-card-hover: #253555;
+            --bg-header: #0f0f23;
+            --bg-footer: #0f0f23;
+            --text-primary: #e0e0e0;
+            --text-secondary: #a0a0b0;
+            --text-muted: #6c6c80;
+            --accent-green: #5cb85c;
+            --accent-blue: #4a9eff;
+            --accent-orange: #f0a030;
+            --accent-red: #e74c3c;
+            --accent-cyan: #00d4ff;
+            --mc-diamond: #4aedd9;
+            --border-color: #2a3a5e;
+            --border-radius: 8px;
+            --shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            --header-height: 56px;
+            --footer-height: 40px;
+            --sidebar-width: 400px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .header {
+            height: var(--header-height);
+            background: var(--bg-header);
+            border-bottom: 1px solid var(--border-color);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 20px; z-index: 1000; flex-shrink: 0;
+        }
+        .header-left { display: flex; align-items: center; gap: 12px; }
+        .header-left .logo { font-size: 28px; }
+        .header-left h1 { font-size: 18px; font-weight: 600; letter-spacing: 1px; }
+        .header-right { display: flex; align-items: center; gap: 16px; }
+        .demo-badge {
+            background: rgba(240, 160, 48, 0.15);
+            color: var(--accent-orange);
+            padding: 4px 14px; border-radius: 20px;
+            font-size: 12px; font-weight: 600;
+            border: 1px solid var(--accent-orange);
+        }
+        .main-content { flex: 1; display: flex; overflow: hidden; }
+        .map-section { flex: 1; position: relative; }
+        #map { width: 100%; height: 100%; background: #0a0a1a; }
+        .leaflet-container { background: #0a0a1a !important; }
+        .leaflet-control-zoom a {
+            background: var(--bg-card) !important;
+            color: var(--text-primary) !important;
+            border-color: var(--border-color) !important;
+        }
+        .charts-section {
+            width: var(--sidebar-width);
+            background: var(--bg-secondary);
+            border-left: 1px solid var(--border-color);
+            overflow-y: auto; padding: 16px;
+            display: flex; flex-direction: column; gap: 16px; flex-shrink: 0;
+        }
+        .chart-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 14px; box-shadow: var(--shadow);
+        }
+        .chart-title {
+            font-size: 14px; font-weight: 600;
+            margin-bottom: 10px; padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .chart-container { width: 100%; height: 220px; }
+        .footer {
+            height: var(--footer-height);
+            background: var(--bg-footer);
+            border-top: 1px solid var(--border-color);
+            display: flex; align-items: center;
+            padding: 0 20px; gap: 24px; flex-shrink: 0;
+        }
+        .footer-item { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+        .footer-label {
+            font-size: 11px; color: var(--text-muted);
+            text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .footer-value {
+            font-size: 12px; color: var(--accent-cyan);
+            font-family: 'Consolas', 'Courier New', monospace;
+        }
+        .player-marker { width: 24px; height: 24px; }
+        .player-marker-inner {
+            width: 100%; height: 100%;
+            background: var(--mc-diamond);
+            border: 2px solid #fff;
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--mc-diamond), 0 0 20px rgba(74, 237, 217, 0.3);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 10px var(--mc-diamond), 0 0 20px rgba(74, 237, 217, 0.3); }
+            50% { box-shadow: 0 0 15px var(--mc-diamond), 0 0 30px rgba(74, 237, 217, 0.5); }
+        }
+        @media (max-width: 900px) {
+            .main-content { flex-direction: column; }
+            .charts-section { width: 100%; max-height: 50vh; border-left: none; border-top: 1px solid var(--border-color); }
+            .chart-container { height: 180px; }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-left">
+            <span class="logo">⛏️</span>
+            <h1>MC 地图数据可视化</h1>
+        </div>
+        <div class="header-right">
+            <span class="demo-badge">📋 演示模式</span>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <section class="map-section">
+            <div id="map"></div>
+        </section>
+
+        <aside class="charts-section">
+            <div class="chart-card">
+                <h3 class="chart-title">📊 方块占比</h3>
+                <div id="block-chart" class="chart-container"></div>
+            </div>
+            <div class="chart-card">
+                <h3 class="chart-title">🌍 群系占比</h3>
+                <div id="biome-chart" class="chart-container"></div>
+            </div>
+            <div class="chart-card">
+                <h3 class="chart-title">🐾 生物统计</h3>
+                <div id="entity-chart" class="chart-container"></div>
+            </div>
+        </aside>
+    </main>
+
+    <footer class="footer">
+        <div class="footer-item">
+            <span class="footer-label">玩家:</span>
+            <span id="player-pos" class="footer-value">--</span>
+        </div>
+        <div class="footer-item">
+            <span class="footer-label">维度:</span>
+            <span id="player-dim" class="footer-value">主世界</span>
+        </div>
+        <div class="footer-item">
+            <span class="footer-label">已探索区域:</span>
+            <span id="explored-regions" class="footer-value">4</span>
+        </div>
+        <div class="footer-item">
+            <span class="footer-label">实体数量:</span>
+            <span id="entity-count" class="footer-value">--</span>
+        </div>
+        <div class="footer-item">
+            <span class="footer-label">世界:</span>
+            <span id="world-name" class="footer-value">演示世界</span>
+        </div>
+    </footer>
+
+    <!-- Libraries (CDN) -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script src="https://unpkg.com/echarts@5.4.3/dist/echarts.min.js"></script>
+
+    <script>
+    // ═══════════════════════════════════════════════════
+    // Demo Data
+    // ═══════════════════════════════════════════════════
+    const DEMO_DATA = {
+        blocks: {
+            '草方块': 28450, '石头': 18200, '泥土': 12800, '橡木': 4500,
+            '橡木树叶': 3800, '沙子': 2100, '水': 5600, '煤炭矿石': 890,
+            '铁矿': 650, '金矿': 120, '钻石矿': 45, '圆石': 3200,
+            '木板': 1500, '砂砾': 780, '粘土': 340
+        },
+        biomes: {
+            '平原': 35200, '森林': 22400, '桦木森林': 8600,
+            '河流': 4200, '沼泽': 2800, '沙漠': 1500
+        },
+        entities: [
+            { type: '猪', x: 120, y: 65, z: -80, category: 'passive' },
+            { type: '猪', x: 125, y: 65, z: -78, category: 'passive' },
+            { type: '猪', x: 118, y: 65, z: -82, category: 'passive' },
+            { type: '牛', x: 200, y: 64, z: 150, category: 'passive' },
+            { type: '牛', x: 205, y: 64, z: 148, category: 'passive' },
+            { type: '牛', x: 198, y: 64, z: 152, category: 'passive' },
+            { type: '牛', x: 210, y: 64, z: 145, category: 'passive' },
+            { type: '鸡', x: 50, y: 63, z: 30, category: 'passive' },
+            { type: '鸡', x: 52, y: 63, z: 28, category: 'passive' },
+            { type: '僵尸', x: -100, y: 20, z: 200, category: 'hostile' },
+            { type: '骷髅', x: -95, y: 18, z: 198, category: 'hostile' },
+            { type: '苦力怕', x: 300, y: 12, z: -150, category: 'hostile' },
+            { type: '蜘蛛', x: 302, y: 15, z: -148, category: 'hostile' },
+            { type: '末影人', x: -200, y: 40, z: -300, category: 'neutral' },
+            { type: '狼', x: 180, y: 65, z: 90, category: 'neutral' },
+            { type: '狼', x: 182, y: 65, z: 88, category: 'neutral' },
+            { type: '羊', x: -50, y: 64, z: 100, category: 'passive' },
+            { type: '羊', x: -48, y: 64, z: 102, category: 'passive' },
+            { type: '羊', x: -52, y: 64, z: 98, category: 'passive' },
+            { type: '羊', x: -46, y: 64, z: 104, category: 'passive' },
+            { type: '马', x: 400, y: 66, z: 400, category: 'passive' },
+            { type: '马', x: 402, y: 66, z: 398, category: 'passive' },
+            { type: '女巫', x: -150, y: 30, z: -50, category: 'hostile' },
+            { type: '史莱姆', x: 80, y: 10, z: -200, category: 'hostile' },
+        ],
+        entityCounts: {
+            '猪': 3, '牛': 4, '鸡': 2, '僵尸': 1, '骷髅': 1,
+            '苦力怕': 1, '蜘蛛': 1, '末影人': 1, '狼': 2, '羊': 4,
+            '马': 2, '女巫': 1, '史莱姆': 1
+        },
+        player: { x: 0, y: 64, z: 0, dimension: 'overworld', health: 20, foodLevel: 18 },
+        stats: { loadedChunks: 49, exploredRegions: 4, totalBlocks: 82975, totalEntities: 24, worldName: '演示世界' },
+        regions: [
+            { regionX: -1, regionZ: -1, layer: 'surface', level: 0 },
+            { regionX: -1, regionZ: 0,  layer: 'surface', level: 0 },
+            { regionX: 0,  regionZ: -1, layer: 'surface', level: 0 },
+            { regionX: 0,  regionZ: 0,  layer: 'surface', level: 0 }
+        ]
+    };
+
+    const BLOCK_COLORS = [
+        '#5d9b3a','#7f7f7f','#8b6914','#3c64b6','#c4b37d',
+        '#6b4c2a','#3b6e29','#a8a8a8','#cf4a1e','#fcdb05',
+        '#4aedd9','#e74c3c','#2c2c2c','#f5e6a3','#5e3a1a'
+    ];
+    const BIOME_COLORS = [
+        '#4a9eff','#5cb85c','#2d7d2d','#c4b37d','#f0f0f0',
+        '#8b4513','#1a5c1a','#6b8e23','#87ceeb','#4169e1'
+    ];
+    const ENTITY_COLORS = {
+        passive: '#5cb85c', hostile: '#e74c3c',
+        neutral: '#f0a030', player: '#4aedd9', other: '#6c6c80'
+    };
+
+    // ═══════════════════════════════════════════════════
+    // Map
+    // ═══════════════════════════════════════════════════
+    const map = L.map('map', { crs: L.CRS.Simple, minZoom: -5, maxZoom: 2 });
+    map.setView([0, 0], -2);
+
+    // Load tiles from local files
+    DEMO_DATA.regions.forEach(region => {
+        const blockX = region.regionX * 512;
+        const blockZ = region.regionZ * 512;
+        const bounds = [[blockZ, blockX], [blockZ + 512, blockX + 512]];
+        const overlay = L.imageOverlay(`tiles/r.${region.regionX}.${region.regionZ}.png`, bounds, { opacity: 0.95 });
+        overlay.bindTooltip(`区域 (${region.regionX}, ${region.regionZ})`, { sticky: true });
+        overlay.addTo(map);
+    });
+    map.fitBounds([[-512, -512], [512, 512]], { padding: [30, 30] });
+
+    // Coordinate display
+    const coordDiv = L.control({ position: 'bottomleft' });
+    coordDiv.onAdd = function() {
+        const div = L.DomUtil.create('div');
+        div.style.cssText = 'background:rgba(15,15,35,0.85);padding:4px 10px;border-radius:4px;font-size:11px;color:#a0a0b0;font-family:Consolas,monospace;border:1px solid #2a3a5e;';
+        div.innerHTML = 'X: 0, Z: 0';
+        return div;
+    };
+    coordDiv.addTo(map);
+    map.on('mousemove', e => {
+        coordDiv.getContainer().innerHTML = `X: ${Math.round(e.latlng.lng)}, Z: ${Math.round(e.latlng.lat)}`;
+    });
+
+    // Heatmap
+    const heatPoints = DEMO_DATA.entities.map(e => {
+        let intensity = e.category === 'hostile' ? 1.0 : e.category === 'neutral' ? 0.7 : 0.3;
+        return [e.z, e.x, intensity];
+    });
+    L.heatLayer(heatPoints, {
+        radius: 20, blur: 15,
+        gradient: { 0: '#0000ff', 0.25: '#00ffff', 0.5: '#00ff00', 0.75: '#ffff00', 1: '#ff0000' }
+    }).addTo(map);
+
+    // Player marker
+    const playerIcon = L.divIcon({
+        className: 'player-marker',
+        html: '<div class="player-marker-inner"></div>',
+        iconSize: [24, 24], iconAnchor: [12, 12]
+    });
+    L.marker([DEMO_DATA.player.z, DEMO_DATA.player.x], { icon: playerIcon, zIndexOffset: 1000 })
+        .bindTooltip(`<strong>⚔️ 玩家</strong><br>X: ${DEMO_DATA.player.x}<br>Y: ${DEMO_DATA.player.y}<br>Z: ${DEMO_DATA.player.z}`, { direction: 'top' })
+        .addTo(map);
+
+    // Entity markers
+    DEMO_DATA.entities.forEach(e => {
+        const color = ENTITY_COLORS[e.category] || ENTITY_COLORS.other;
+        const icon = L.divIcon({
+            className: '', html: `<div style="width:8px;height:8px;border-radius:50%;background:${color};border:1px solid rgba(255,255,255,0.6)"></div>`,
+            iconSize: [8, 8], iconAnchor: [4, 4]
+        });
+        L.marker([e.z, e.x], { icon }).bindTooltip(`${e.type}`, { direction: 'top' }).addTo(map);
+    });
+
+    // ═══════════════════════════════════════════════════
+    // Charts
+    // ═══════════════════════════════════════════════════
+    // Block pie chart
+    const blockChart = echarts.init(document.getElementById('block-chart'));
+    const blockEntries = Object.entries(DEMO_DATA.blocks).sort((a, b) => b[1] - a[1]);
+    const blockTotal = blockEntries.reduce((s, [, v]) => s + v, 0);
+    blockChart.setOption({
+        tooltip: {
+            trigger: 'item',
+            backgroundColor: 'rgba(30,42,69,0.95)', borderColor: '#2a3a5e',
+            textStyle: { color: '#e0e0e0', fontSize: 12 },
+            formatter: p => `<strong>${p.name}</strong><br>数量: ${p.value.toLocaleString()}<br>占比: ${((p.value/blockTotal)*100).toFixed(1)}%`
+        },
+        legend: { type:'scroll', orient:'vertical', right:5, top:10, bottom:10, textStyle:{color:'#a0a0b0',fontSize:11}, pageTextStyle:{color:'#a0a0b0'}, pageIconColor:'#4a9eff', pageIconInactiveColor:'#444466' },
+        series: [{
+            type: 'pie', radius: ['35%','65%'], center: ['35%','50%'],
+            itemStyle: { borderRadius:4, borderColor:'#1e2a45', borderWidth:2 },
+            label: { show: false },
+            emphasis: { label: { show:true, fontSize:13, fontWeight:'bold', color:'#e0e0e0', formatter:'{b}\n{d}%' } },
+            data: blockEntries.map(([name, value], i) => ({ name, value, itemStyle: { color: BLOCK_COLORS[i % BLOCK_COLORS.length] } }))
+        }]
+    });
+
+    // Biome rose chart
+    const biomeChart = echarts.init(document.getElementById('biome-chart'));
+    const biomeEntries = Object.entries(DEMO_DATA.biomes).sort((a, b) => b[1] - a[1]);
+    const biomeTotal = biomeEntries.reduce((s, [, v]) => s + v, 0);
+    biomeChart.setOption({
+        tooltip: {
+            trigger: 'item',
+            backgroundColor: 'rgba(30,42,69,0.95)', borderColor: '#2a3a5e',
+            textStyle: { color: '#e0e0e0', fontSize: 12 },
+            formatter: p => `<strong>${p.name}</strong><br>采样: ${p.value.toLocaleString()}<br>占比: ${((p.value/biomeTotal)*100).toFixed(1)}%`
+        },
+        legend: { type:'scroll', orient:'vertical', right:5, top:10, bottom:10, textStyle:{color:'#a0a0b0',fontSize:11}, pageTextStyle:{color:'#a0a0b0'}, pageIconColor:'#4a9eff', pageIconInactiveColor:'#444466' },
+        series: [{
+            type: 'pie', radius: ['0%','65%'], center: ['35%','50%'], roseType: 'area',
+            itemStyle: { borderRadius:4, borderColor:'#1e2a45', borderWidth:2 },
+            label: { show: false },
+            emphasis: { label: { show:true, fontSize:13, fontWeight:'bold', color:'#e0e0e0', formatter:'{b}\n{d}%' } },
+            data: biomeEntries.map(([name, value], i) => ({ name, value, itemStyle: { color: BIOME_COLORS[i % BIOME_COLORS.length] } }))
+        }]
+    });
+
+    // Entity bar chart
+    const entityChart = echarts.init(document.getElementById('entity-chart'));
+    const topEntities = Object.entries(DEMO_DATA.entityCounts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    entityChart.setOption({
+        tooltip: { trigger:'axis', backgroundColor:'rgba(30,42,69,0.95)', borderColor:'#2a3a5e', textStyle:{color:'#e0e0e0',fontSize:12}, axisPointer:{type:'shadow'} },
+        grid: { left:10, right:10, top:10, bottom:30, containLabel:true },
+        xAxis: { type:'category', data:topEntities.map(([n])=>n), axisLabel:{color:'#a0a0b0',fontSize:10,rotate:30,interval:0}, axisLine:{lineStyle:{color:'#2a3a5e'}}, axisTick:{show:false} },
+        yAxis: { type:'value', axisLabel:{color:'#6c6c80',fontSize:10}, axisLine:{show:false}, splitLine:{lineStyle:{color:'#1a2a45'}} },
+        series: [{
+            type: 'bar', barMaxWidth: 40,
+            data: topEntities.map(([, count], i) => ({
+                value: count,
+                itemStyle: {
+                    color: new echarts.graphic.LinearGradient(0,0,0,1,[
+                        { offset:0, color: BLOCK_COLORS[i % BLOCK_COLORS.length] },
+                        { offset:1, color:'rgba(30,42,69,0.8)' }
+                    ]),
+                    borderRadius: [4,4,0,0]
+                }
+            })),
+            label: { show:true, position:'top', color:'#a0a0b0', fontSize:11 }
+        }]
+    });
+
+    // Responsive
+    window.addEventListener('resize', () => {
+        blockChart.resize();
+        biomeChart.resize();
+        entityChart.resize();
+        map.invalidateSize();
+    });
+
+    // Update footer
+    document.getElementById('player-pos').textContent = `(${DEMO_DATA.player.x}, ${DEMO_DATA.player.y}, ${DEMO_DATA.player.z})`;
+    document.getElementById('entity-count').textContent = DEMO_DATA.entities.length;
+    document.getElementById('explored-regions').textContent = DEMO_DATA.regions.length;
+    document.getElementById('world-name').textContent = DEMO_DATA.stats.worldName;
+
+    // Simulate real-time player movement
+    setInterval(() => {
+        DEMO_DATA.player.x += (Math.random() - 0.5) * 3;
+        DEMO_DATA.player.z += (Math.random() - 0.5) * 3;
+        document.getElementById('player-pos').textContent =
+            `(${Math.round(DEMO_DATA.player.x)}, ${Math.round(DEMO_DATA.player.y)}, ${Math.round(DEMO_DATA.player.z)})`;
+    }, 3000);
+    </script>
+</body>
+</html>
